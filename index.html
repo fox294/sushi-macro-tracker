@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1C6A73" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11161B" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Daily calorie and macro log for nigiri and sashimi, kept on your phone.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Sushi Macro Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Same layout and look as the Disneyland Macro Tracker: sticky day bar (date + running totals), then the menu to check off and the day's log; side by side on wide screens, tabs on phones. */
+:root{
+  --bg:#F2F4F1; --surface:#FFFFFF; --ink:#18212B; --muted:#5A6570; --line:#D8DDD6; --accent:#1C6A73; --accent-soft:#DDEDEE; --on-accent:#FFFFFF;
+  --lean:#2A7548; --lean-bg:#DDEFE3; --solid:#1C6A73; --solid-bg:#DDEDEE; --heavy:#94570A; --heavy-bg:#F6E8D2; --treat:#9C3343; --treat-bg:#F5DFE2;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161B; --surface:#182027; --ink:#E4E8EC; --muted:#99A4AF; --line:#2A333C; --accent:#66BBC4; --accent-soft:#1C3135; --on-accent:#0E1418;
+  --lean:#82D3A0; --lean-bg:#1B3226; --solid:#7DC6CE; --solid-bg:#1B3033; --heavy:#E6B467; --heavy-bg:#3A2C15; --treat:#EF8F9E; --treat-bg:#3B1F25; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161B; --surface:#182027; --ink:#E4E8EC; --muted:#99A4AF; --line:#2A333C; --accent:#66BBC4; --accent-soft:#1C3135; --on-accent:#0E1418;
+  --lean:#82D3A0; --lean-bg:#1B3226; --solid:#7DC6CE; --solid-bg:#1B3033; --heavy:#E6B467; --heavy-bg:#3A2C15; --treat:#EF8F9E; --treat-bg:#3B1F25; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1180px;margin:0 auto}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tn{font-variant-numeric:tabular-nums}
+header.top{padding-top:20px;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px}
+.eyebrow{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-size:13px;font-weight:600;color:var(--accent)}
+h1{font-family:var(--display);font-size:clamp(30px,5vw,44px);line-height:1;margin:4px 0 0;font-weight:700}
+.status{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.status[data-s="local"] .dot{background:var(--lean)} .status[data-s="warn"] .dot{background:var(--heavy)}
+/* sticky day bar */
+.daybar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 10px;border-bottom:1px solid var(--line);margin-top:12px;display:grid;gap:10px}
+.dayrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.datepick{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.datepick button{border:0;background:transparent;padding:7px 11px;cursor:pointer;font-size:16px;line-height:1}
+.datepick input{border:0;border-inline:1px solid var(--line);background:transparent;padding:6px 8px;min-width:0}
+.daylabel{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:.02em}
+.totals{display:grid;grid-template-columns:repeat(5,auto);justify-content:start;gap:4px 22px;align-items:end}
+.tot{display:grid;gap:0}
+.tot .l{font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tot .v{font-family:var(--display);font-size:28px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.tot .v small{font-size:14px;font-weight:600;color:var(--muted);margin-left:2px}
+.tabs{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);width:max-content;max-width:100%}
+.tabs button{border:0;background:transparent;padding:7px 14px;cursor:pointer;font-size:14px}
+.tabs button+button{border-left:1px solid var(--line)}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
+@media (max-width:560px){.daybar{padding-block:8px 8px;gap:8px;margin-top:8px}.totals{grid-template-columns:repeat(5,auto);gap:2px 12px}.tot .v{font-size:21px}.tot .v small{font-size:12px}.tot .l{font-size:11px}.daylabel{font-size:17px}.datepick button{padding:6px 9px}#tR .chip{font-size:16px!important;padding:1px 7px!important}}
+/* layout */
+.layout{display:grid;gap:20px;margin-top:16px;align-items:start}
+@media (min-width:960px){.layout{grid-template-columns:minmax(0,1fr) 380px}.tabs{display:none}
+  aside{position:sticky;top:calc(env(safe-area-inset-top,0px) + 150px);max-height:calc(100vh - 170px);overflow:auto}}
+@media (max-width:959px){.panel{display:none} body[data-tab="menu"] #p-menu, body[data-tab="log"] #p-log, body[data-tab="recent"] #p-recent, body[data-tab="history"] #p-history{display:block}}
+@media (max-width:420px){.tabs button{padding:7px 10px}}
+aside{display:grid;gap:20px;min-width:0}
+h2{font-family:var(--display);font-size:20px;font-weight:700;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+/* nigiri / sashimi switch */
+.stylesw{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);margin-bottom:10px;max-width:420px}
+.stylesw button{border:0;background:transparent;padding:9px 12px;cursor:pointer;font-family:var(--display);font-size:19px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1.15}
+.stylesw button small{display:block;font-family:var(--body);font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;opacity:.8}
+.stylesw button+button{border-left:1px solid var(--line)}
+.stylesw button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+/* filters */
+.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.filters .full{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fl{display:grid;gap:3px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-family:var(--display)}
+input[type=search],input[type=text],input[type=number],select{font-size:15px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0;width:100%;text-transform:none;letter-spacing:0;font-family:var(--body);font-weight:400;color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:6px 11px;cursor:pointer;font-size:13.5px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
+@media (max-width:640px){.seg{display:grid;grid-template-columns:1fr 1fr;width:100%}.seg button{border-left:0!important;border-top:1px solid var(--line)}.seg button:first-child{grid-column:1/-1;border-top:0}.seg button:nth-child(odd):not(:first-child){border-left:1px solid var(--line)!important}}
+.filters select{width:auto}
+.filters .fl select{width:100%}
+.count{font-size:13px;color:var(--muted);margin:0 0 8px}
+.portmsg{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px;color:var(--muted);margin:-2px 0 10px}
+@media (max-width:760px){.filters{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.filters .fl.q{grid-column:1/-1}}
+/* menu rows */
+.mrow{border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:0}
+.mrow.on{background:var(--accent-soft)}
+.mg{display:grid;grid-template-columns:30px minmax(0,1fr) 58px 46px 42px 46px 66px;gap:0 10px;align-items:center;padding:9px 12px}
+.mhead{background:var(--bg);border-bottom:1px solid var(--line);font-family:var(--display);font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-block:7px}
+.mhead span{text-align:right}.mhead span:nth-child(2){text-align:left}
+.ck{width:22px;height:22px;accent-color:var(--accent);cursor:pointer;margin:0}
+.nm{min-width:0;display:grid;gap:2px}
+.nm .it{font-weight:600;line-height:1.3;background:none;border:0;padding:0;text-align:left;cursor:pointer}
+.nm .it:hover{text-decoration:underline}
+.nm .lc{font-size:12.5px;color:var(--muted)}
+.qtywrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13px;color:var(--muted);margin-top:4px}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+.n.k{font-weight:700}.n.p{font-weight:600}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:0 6px;border-radius:4px;margin-left:6px;border:1px solid var(--line);color:var(--muted);vertical-align:1px}
+.tag.pub{border-color:var(--lean);color:var(--lean)}
+.tag.lib{border-color:var(--accent);color:var(--accent)}
+.chip{display:inline-block;min-width:46px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;border-radius:999px;padding:2px 8px;font-size:13px}
+.chip.lean{color:var(--lean);background:var(--lean-bg)}.chip.solid{color:var(--solid);background:var(--solid-bg)}
+.chip.heavy{color:var(--heavy);background:var(--heavy-bg)}.chip.treat{color:var(--treat);background:var(--treat-bg)}.chip.na{color:var(--muted);background:var(--bg)}
+.det{padding:0 12px 12px 52px;font-size:13.5px;display:grid;gap:8px}
+.det table{border-collapse:collapse;width:100%;max-width:460px}
+.det td{padding:2px 0;border-bottom:1px dashed var(--line)}
+.det td.g{text-align:right;color:var(--muted);width:64px;font-variant-numeric:tabular-nums}
+.det td.kc{text-align:right;color:var(--muted);width:76px;font-variant-numeric:tabular-nums}
+.det .meta{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--muted)}
+.det .meta b{color:var(--ink)}
+.det .src{color:var(--muted);font-size:12.5px}
+/* piece stepper */
+.stp{display:inline-flex;align-items:center;border:1px solid var(--accent);border-radius:8px;background:var(--surface);overflow:hidden;color:var(--ink)}
+.stp button{border:0;background:transparent;width:38px;height:34px;font-size:20px;line-height:1;cursor:pointer;color:var(--accent);font-weight:700;padding:0}
+.stp button:disabled{color:var(--line);cursor:default}
+.stp b{min-width:30px;text-align:center;font-variant-numeric:tabular-nums;font-size:15px}
+.stp+span{font-size:13px;color:var(--muted)}
+/* part editor: untick a part, or change its multiplier */
+.cmp{display:grid;gap:0;max-width:520px}
+.cmphelp{margin:0 0 4px;font-size:12.5px;color:var(--muted)}
+.crow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.crow .cl{display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer;min-height:28px}
+.crow .cl input{width:20px;height:20px;accent-color:var(--accent);margin:0;flex:none}
+.crow select{width:auto;padding:3px 6px;font-size:14px}
+.crow .cg{grid-column:1/-1;padding-left:28px;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.crow.off .cl span{text-decoration:line-through;color:var(--muted)}
+.crow.chg .cl span{font-weight:600}
+.cbar{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;font-size:13px}
+.lnk{background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;font-weight:600;font-size:13px}
+.lnk:hover{text-decoration:underline}
+.adjl{color:var(--muted)} .adjl b{color:var(--ink);font-weight:600}
+.lrow .cmp{grid-column:1/-1;margin-top:2px}
+.empty{padding:22px 14px;color:var(--muted);text-align:center}
+@media (max-width:640px){
+  .mhead{display:none}
+  .mg{grid-template-columns:30px repeat(4,minmax(0,1fr)) auto;grid-template-areas:"ck nm nm nm nm nm" ". k p f c r";gap:6px 8px;align-items:start}
+  .mg>.ckc{grid-area:ck;padding-top:1px}.mg>.nm{grid-area:nm}
+  .mg>.n{text-align:left}.mg>.n.k{grid-area:k}.mg>.n.p{grid-area:p}.mg>.n.f{grid-area:f}.mg>.n.c{grid-area:c}.mg>.n.r{grid-area:r;align-self:end}
+  .mg>.n[data-l]::before{content:attr(data-l);display:block;font-family:var(--display);font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+  .det{padding-left:12px}
+}
+/* log */
+.lrow{display:grid;grid-template-columns:minmax(0,1fr);gap:6px 10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:center}
+.lrow:last-child{border-bottom:0}
+.lrow .nm2{min-width:0;font-weight:600;line-height:1.3}
+.lrow .lc{font-size:12.5px;color:var(--muted);font-weight:400}
+.lrow .mac{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lrow .mac b{color:var(--ink)}
+.lctl{display:flex;align-items:center;gap:8px}
+.lctl .btn.x{margin-left:auto}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 11px;cursor:pointer;font-size:13.5px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.x{padding:4px 9px;color:var(--muted)}
+.logfoot{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--bg);align-items:center}
+.custom{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px}
+.custom .wide{grid-column:1/-1}
+.custom label{display:grid;gap:3px;font-size:12px;color:var(--muted);font-family:var(--display);font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.custom .act{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.msg{font-size:13px;color:var(--muted)}
+.msg.err{color:var(--treat)}
+textarea.copybox{width:100%;min-height:120px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
+/* recent */
+.rrow{display:grid;grid-template-columns:30px minmax(0,1fr);gap:4px 10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:start}
+.rrow:last-child{border-bottom:0}
+.rrow.on{background:var(--accent-soft)}
+.rrow .ck{margin-top:1px}
+.rrow .nm2{min-width:0;font-weight:600;line-height:1.3}
+.rrow .lc{font-size:12.5px;color:var(--muted);font-weight:400}
+.rrow .mac{grid-column:2;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rrow .mac b{color:var(--ink)}
+/* history */
+.hrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left}
+.hrow:last-child{border-bottom:0}
+.hrow:hover{background:var(--accent-soft)}
+.hrow.cur{background:var(--accent-soft)}
+.hrow .d{font-weight:600}
+.hrow .s{grid-column:1/-1;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hrow .s b{color:var(--ink)}
+.backup{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.mfh{margin-top:18px}
+.mfhelp{font-size:13px;color:var(--muted);margin:0 0 8px;max-width:60ch}
+.mfhead{padding:8px 12px;font-size:13px;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.mfrow{padding:10px 12px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.mfrow:last-child{border-bottom:0}
+.mfrow.done{opacity:.6}
+.mfn{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.mfname{background:none;border:0;padding:0;text-align:left;font-weight:600;line-height:1.3;cursor:pointer;min-width:0}
+.mfname:hover{text-decoration:underline}
+.mfck{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap;cursor:pointer}
+.mfck input{width:20px;height:20px;accent-color:var(--accent);margin:0}
+.mfvals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mfv{display:grid;gap:1px;justify-items:start;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 9px;cursor:pointer;text-align:left;min-width:0}
+.mfv span{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.mfv b{font-size:18px;font-variant-numeric:tabular-nums;user-select:all}
+.mfv:hover,.mfname.copied{border-color:var(--accent)}
+.mfv.copied{background:var(--lean-bg);border-color:var(--lean)}
+.mfv.copied span::after{content:" · copied";color:var(--lean)}
+footer{margin-top:28px;font-size:13px;color:var(--muted);max-width:76ch;display:grid;gap:6px}
+footer p{margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+<style>[hidden]{display:none!important} html{-webkit-text-size-adjust:100%}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div><div class="eyebrow">Nigiri · sashimi · daily log</div><h1>Sushi Macro Tracker</h1></div>
+    <button type="button" class="btn primary" id="installBtn" hidden>Install app</button>
+    <div class="status" id="status" data-s="local" aria-live="polite"><span class="dot"></span><span id="statusText">Loading…</span></div>
+  </header>
+
+  <div class="daybar">
+    <div class="dayrow">
+      <div class="datepick">
+        <button type="button" id="prevDay" aria-label="Previous day">&#8249;</button>
+        <input type="date" id="dateInput" aria-label="Day">
+        <button type="button" id="nextDay" aria-label="Next day">&#8250;</button>
+      </div>
+      <span class="daylabel" id="dayLabel"></span>
+      <button type="button" class="btn" id="todayBtn">Today</button>
+    </div>
+    <div class="totals" aria-label="Day totals">
+      <div class="tot"><span class="l">kcal</span><span class="v" id="tK">0</span></div>
+      <div class="tot"><span class="l">Protein</span><span class="v" id="tP">0<small>g</small></span></div>
+      <div class="tot"><span class="l">Fat</span><span class="v" id="tF">0<small>g</small></span></div>
+      <div class="tot"><span class="l">Carbs</span><span class="v" id="tC">0<small>g</small></span></div>
+      <div class="tot"><span class="l">kcal/g P</span><span class="v" id="tR">–</span></div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" id="tab-menu" data-tab="menu">Menu</button>
+      <button type="button" role="tab" id="tab-log" data-tab="log">Day log</button>
+      <button type="button" role="tab" id="tab-recent" data-tab="recent">Recent</button>
+      <button type="button" role="tab" id="tab-history" data-tab="history">History</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="panel" id="p-menu" aria-labelledby="h-menu">
+      <h2 id="h-menu">Check what you ate</h2>
+      <div class="stylesw" role="group" aria-label="Nigiri or sashimi">
+        <button type="button" data-style="n">Nigiri<small>fish on rice</small></button>
+        <button type="button" data-style="s">Sashimi<small>fish only</small></button>
+      </div>
+      <div class="filters">
+        <label class="fl q" for="qFood">Search<input type="search" id="qFood" placeholder="e.g. salmon, hamachi, uni" autocomplete="off"></label>
+        <label class="fl" for="riceSel">Rice per nigiri<select id="riceSel"></select></label>
+        <label class="fl" for="fishSel">Fish slices<select id="fishSel"></select></label>
+        <div class="full">
+          <div class="seg" role="group" aria-label="Type" id="catSeg"></div>
+          <select id="sortSel" aria-label="Sort">
+            <option value="ratio">Sort: kcal per g protein</option>
+            <option value="p">Sort: most protein</option>
+            <option value="k">Sort: fewest calories</option>
+            <option value="type">Sort: type</option>
+            <option value="name">Sort: name</option>
+          </select>
+          <button type="button" class="btn" id="clearFilters">Clear filters</button>
+        </div>
+      </div>
+      <div class="portmsg" id="portMsg" hidden></div>
+      <p class="count" id="count"></p>
+      <div class="card">
+        <div class="mg mhead" aria-hidden="true"><span></span><span id="mheadItem">Per piece</span><span>kcal</span><span>Prot</span><span>Fat</span><span>Carb</span><span>kcal/g P</span></div>
+        <div id="menuRows"></div>
+      </div>
+    </section>
+
+    <aside>
+      <section class="panel" id="p-log" aria-labelledby="h-log">
+        <h2 id="h-log">Day log</h2>
+        <div class="card">
+          <div id="logRows"></div>
+          <div class="logfoot">
+            <button type="button" class="btn" id="copyLog">Copy day log</button>
+            <button type="button" class="btn" id="toggleCustom">Add something not listed</button>
+            <span class="msg" id="logMsg" aria-live="polite"></span>
+          </div>
+          <form class="custom" id="customForm" hidden>
+            <label class="wide" for="cName">Item<input type="text" id="cName" required placeholder="e.g. Spicy tuna roll, 8 pc"></label>
+            <label for="cK">kcal<input type="number" id="cK" inputmode="decimal" min="0" step="1" required></label>
+            <label for="cP">Protein g<input type="number" id="cP" inputmode="decimal" min="0" step="0.1" value="0"></label>
+            <label for="cF">Fat g<input type="number" id="cF" inputmode="decimal" min="0" step="0.1" value="0"></label>
+            <label for="cC">Carbs g<input type="number" id="cC" inputmode="decimal" min="0" step="0.1" value="0"></label>
+            <div class="act"><button type="submit" class="btn primary">Add to this day</button><button type="button" class="btn" id="cancelCustom">Cancel</button></div>
+          </form>
+          <div id="copyWrap" hidden style="padding:0 12px 12px"><textarea class="copybox" id="copyBox" aria-label="Day log text" readonly></textarea></div>
+        </div>
+        <h2 id="h-mf" class="mfh">Enter in MacroFactor</h2>
+        <p class="mfhelp">In MacroFactor, tap + then Quick Add. Tap a value here to copy it, paste it into the matching field, then tick Entered. Quick Add asks for calories, protein, fat and carbs in this order; the name is optional.</p>
+        <div class="card" id="mfRows"></div>
+        <p class="msg" id="mfMsg" aria-live="polite"></p>
+      </section>
+      <section class="panel" id="p-recent" aria-labelledby="h-recent">
+        <h2 id="h-recent">Recent</h2>
+        <p class="mfhelp">What you've logged, newest first, one row per item. Tick one to add it to the day shown above (1 piece); untick to take it off that day. Change the count in Day log.</p>
+        <div class="card" id="recentRows"></div>
+      </section>
+      <section class="panel" id="p-history" aria-labelledby="h-hist">
+        <h2 id="h-hist">History</h2>
+        <div class="card" id="histRows"></div>
+        <div class="backup"><button type="button" class="btn" id="backupBtn">Back up log</button><button type="button" class="btn" id="restoreBtn">Restore from backup</button><input type="file" id="restoreFile" accept="application/json,.json" hidden><span class="msg" id="backupMsg" aria-live="polite"></span></div>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    <p><b>Estimates</b> [likely, ±20–30% per piece]: the fish is weighed by assumption, not measured, and restaurants vary. Fish and shellfish numbers come from USDA FoodData Central, or from Japan's Standard Tables of Food Composition (8th edition) for items USDA doesn't cover (toro, albacore, uni, ikura, unagi, tamago and others). Tuna, salmon, mackerel, shrimp, snapper, hamachi and the sushi rice use the same values as your macro library's October 17 nigiri estimate. Tap an item's name to see its parts, grams and source.</p>
+    <p><b>Portions</b>: nigiri assume 15 g of fish and 22 g of rice per piece unless the item says otherwise; sashimi assume 18 g slices for tuna, salmon and yellowtail. Tokyo counters often use 10–15 g of rice and many US restaurants 25–30 g, so set Rice per nigiri to match the place. Each logged item keeps the numbers it had when you logged it.</p>
+    <p>Your log lives only on this phone, in this app; nothing is sent anywhere. Use Back up in History to save a copy to your Downloads. App version <span id="appVer"></span>.</p>
+    <p id="installHint">To install on Android: open this page in Chrome, tap the ⋮ menu, then Install app (or Add to Home screen). It works offline after the first visit.</p>
+  </footer>
+</div>
+
+<script>
+const APP_VERSION = '2026-11-06.1';
+// ---------- food data ----------
+// Per 100 g edible portion: [kcal, protein g, fat g, carbs g]. n = nigiri per piece, s = sashimi per slice (grams).
+// src kinds: usda = USDA FoodData Central; jp = Japan Standard Tables of Food Composition 2020 (8th ed.);
+// lib = same value as Mike's Food Macro Estimation Project library; label = manufacturer label; est = built estimate.
+const PARTS = {
+  rice: { label: 'Sushi rice, seasoned', per: [128.9, 2.13, 0.17, 28.61], src: 'Built on USDA FDC 168932 (short-grain white rice, cooked) with vinegar, sugar and salt; same basis as your macro library (Oct 17 nigiri record)' },
+  nori: { label: 'Nori strip', per: [298, 31.84, 4.01, 52.39], src: 'USDA FDC 2709988 (seaweed, dried)' },
+  sauce: { label: 'Eel sauce drizzle', per: [200, 5, 0, 50], src: 'Kikkoman Unagi Sushi Sauce label: 1 tbsp (20 g) = 40 kcal, P 1, F 0, C 10' },
+  oil: { label: 'Searing oil', per: [884, 0, 100, 0], src: 'USDA FDC 171413 (olive oil); 0.5 g per piece assumed, as in your library' }
+};
+const FOODS = [
+  // ---- tuna ----
+  { id: 'maguro', en: 'Tuna (ahi / maguro)', jp: 'Maguro', aka: 'yellowfin akami red', cat: 'fish', per: [109, 24.4, 0.49, 0], kind: 'lib', src: 'USDA FDC 175159, yellowfin tuna, raw (your library uses the same record)', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'aburi-maguro', en: 'Seared tuna (tataki)', jp: 'Aburi maguro', aka: 'seared ahi tataki', cat: 'fish', per: [109, 24.4, 0.49, 0], kind: 'lib', src: 'USDA FDC 175159, yellowfin tuna, raw, plus 0.5 g searing oil per piece (your library\'s assumption)', n: { fish: 15, oil: 0.5 }, s: { fish: 18, oil: 0.5 } },
+  { id: 'akami', en: 'Bluefin tuna, lean', jp: 'Hon-maguro akami', aka: 'bluefin honmaguro', cat: 'fish', per: [115, 26.4, 1.4, 0.1], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10253, bluefin tuna, wild, lean meat, raw', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'chutoro', en: 'Medium fatty tuna', jp: 'Chutoro', aka: 'chu toro belly', cat: 'fish', per: [211.5, 23.25, 14.45, 0.1], kind: 'est', src: 'Average of Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10253 (bluefin lean) and 10254 (bluefin fatty)', n: { fish: 15 }, s: { fish: 18 }, note: 'No food table lists chutoro; this is the average of bluefin lean and fatty tuna. It varies a lot with the cut.' },
+  { id: 'otoro', en: 'Fatty tuna belly', jp: 'Otoro', aka: 'o-toro toro belly', cat: 'fish', per: [308, 20.1, 27.5, 0.1], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10254, bluefin tuna, wild, fatty meat, raw (farmed fatty bluefin, 10459, is 321 kcal)', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'binnaga', en: 'Albacore (white tuna)', jp: 'Binnaga / shiro maguro', aka: 'albacore white tuna bincho', cat: 'fish', per: [111, 26.0, 0.7, 0.2], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10255, albacore, raw', n: { fish: 15 }, s: { fish: 18 }, note: 'Some US menus call escolar "white tuna"; escolar is a different, much oilier fish that is not in this list.' },
+  // ---- salmon ----
+  { id: 'sake', en: 'Salmon', jp: 'Sake / shake', aka: 'atlantic farmed', cat: 'fish', per: [203, 20.3, 13.1, 0], kind: 'lib', src: 'USDA FDC 2684441, Atlantic salmon, farm raised, raw (Foundation; your library uses the same record)', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'king-salmon', en: 'King salmon', jp: 'Masunosuke', aka: 'chinook king', cat: 'fish', per: [179, 19.9, 10.4, 0], kind: 'usda', src: 'USDA FDC 173688, chinook salmon, raw', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'smoked-salmon', en: 'Smoked salmon', jp: 'Smoked sake', aka: 'lox', cat: 'fish', per: [117, 18.3, 4.32, 0], kind: 'usda', src: 'USDA FDC 173687, chinook salmon, smoked', n: { fish: 15 }, s: { fish: 18 } },
+  // ---- yellowtail and jacks ----
+  { id: 'hamachi', en: 'Yellowtail', jp: 'Hamachi', aka: 'yellowtail buri', cat: 'fish', per: [215, 20.5, 17.5, 0], kind: 'lib', src: 'Farmed hamachi basis from your library (derived from Japan\'s food table via Calorie Slism, about 215 kcal and 17.5 g fat per 100 g). Japan\'s table lists farmed hamachi at 217 kcal with skin (10243) and 180 kcal skinless (10411); USDA FDC 175163 (wild yellowtail, 146 kcal, 5.2 g fat) is the lean case', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'kanpachi', en: 'Amberjack', jp: 'Kanpachi', aka: 'amberjack', cat: 'fish', per: [119, 21.0, 4.2, 0.1], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10108, greater amberjack, raw', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'aji', en: 'Horse mackerel', jp: 'Aji', aka: 'jack mackerel', cat: 'fish', per: [112, 19.7, 4.5, 0.1], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10003, Japanese horse mackerel, with skin, raw', n: { fish: 12 }, s: { fish: 15 } },
+  { id: 'saba', en: 'Mackerel', jp: 'Saba', aka: 'mackerel shime saba', cat: 'fish', per: [205, 18.6, 13.9, 0], kind: 'lib', src: 'USDA FDC 175119, Atlantic mackerel, raw (your library uses the same record and a 12 g slice)', n: { fish: 12 }, s: { fish: 15 } },
+  // ---- white fish ----
+  { id: 'tai', en: 'Red snapper / sea bream', jp: 'Tai / madai', aka: 'snapper sea bream tilapia', cat: 'fish', per: [100, 20.5, 1.34, 0], kind: 'lib', src: 'USDA FDC 173698, snapper, raw (your library uses the same record). US "red snapper" nigiri is often tilapia, which is nearly identical.', n: { fish: 15 }, s: { fish: 15 } },
+  { id: 'hirame', en: 'Halibut / fluke', jp: 'Hirame', aka: 'halibut fluke flounder', cat: 'fish', per: [91, 18.6, 1.33, 0], kind: 'usda', src: 'USDA FDC 174200, halibut, Atlantic and Pacific, raw', n: { fish: 12 }, s: { fish: 12 } },
+  { id: 'suzuki', en: 'Sea bass', jp: 'Suzuki', aka: 'sea bass branzino', cat: 'fish', per: [97, 18.4, 2.0, 0], kind: 'usda', src: 'USDA FDC 175142, sea bass, mixed species, raw', n: { fish: 12 }, s: { fish: 12 } },
+  // ---- eel ----
+  { id: 'unagi', en: 'Freshwater eel', jp: 'Unagi', aka: 'eel kabayaki', cat: 'fish', per: [285, 23.0, 21.0, 3.1], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10070, eel, kabayaki (seasoned and grilled)', n: { fish: 15, sauce: 3 }, s: { fish: 18, sauce: 3 }, note: 'Grilled kabayaki eel already includes its glaze; the drizzle adds the extra sauce brushed on top.' },
+  { id: 'anago', en: 'Sea eel', jp: 'Anago', aka: 'conger sea eel', cat: 'fish', per: [173, 17.6, 12.7, 0], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10016, conger eel, steamed (closest to simmered sushi anago)', n: { fish: 15, sauce: 3 }, s: { fish: 18, sauce: 3 } },
+  // ---- shellfish ----
+  { id: 'ebi', en: 'Shrimp, cooked', jp: 'Ebi', aka: 'shrimp prawn', cat: 'shell', per: [99, 24.0, 0.28, 0.2], kind: 'lib', src: 'USDA FDC 175180, shrimp, cooked (your library uses the same record)', n: { fish: 10 }, s: { fish: 10 }, note: 'A butterflied nigiri shrimp is about 10 g edible; thin platter shrimp can be 7 g.' },
+  { id: 'amaebi', en: 'Sweet shrimp, raw', jp: 'Amaebi', aka: 'sweet shrimp botan ebi spot prawn', cat: 'shell', per: [85, 20.1, 0.51, 0], kind: 'usda', src: 'USDA FDC 175179, shrimp, raw', n: { fish: 12 }, s: { fish: 12 } },
+  { id: 'hotate', en: 'Scallop', jp: 'Hotate', aka: 'scallop', cat: 'shell', per: [66.4, 13.5, 0.49, 1.97], kind: 'usda', src: 'USDA FDC 2747667, sea scallops, wild caught (Foundation)', n: { fish: 15 }, s: { fish: 18 } },
+  { id: 'ika', en: 'Squid', jp: 'Ika', aka: 'squid', cat: 'shell', per: [92, 15.6, 1.38, 3.08], kind: 'usda', src: 'USDA FDC 174223, squid, raw', n: { fish: 12 }, s: { fish: 12 } },
+  { id: 'tako', en: 'Octopus, boiled', jp: 'Tako', aka: 'octopus', cat: 'shell', per: [91, 21.7, 0.7, 0.1], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10362, common octopus, boiled', n: { fish: 12 }, s: { fish: 10 } },
+  { id: 'hokkigai', en: 'Surf clam', jp: 'Hokkigai', aka: 'surf clam', cat: 'shell', per: [66, 11.1, 1.1, 3.8], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10316, Sakhalin surf clam, raw', n: { fish: 12 }, s: { fish: 12 } },
+  { id: 'kani', en: 'Crab, snow (real)', jp: 'Kani', aka: 'crab snow queen', cat: 'shell', per: [115, 23.7, 1.51, 0], kind: 'usda', src: 'USDA FDC 172008, queen (snow) crab, cooked', n: { fish: 15 }, s: { fish: 15 } },
+  { id: 'kanikama', en: 'Imitation crab', jp: 'Kanikama', aka: 'krab surimi kani stick', cat: 'shell', per: [95, 7.62, 0.46, 15.0], kind: 'usda', src: 'USDA FDC 174203, imitation crab made from surimi', n: { fish: 15 }, s: { fish: 15 } },
+  // ---- roe, urchin, egg (gunkan: a nori strip holds the topping) ----
+  { id: 'ikura', en: 'Salmon roe', jp: 'Ikura', aka: 'salmon roe gunkan', cat: 'roe', per: [252, 32.6, 15.6, 0.2], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10140, chum salmon ikura (salted roe)', n: { fish: 15, nori: 0.5 }, s: { fish: 15, unit: 'spoonful' } },
+  { id: 'uni', en: 'Sea urchin', jp: 'Uni', aka: 'sea urchin gunkan', cat: 'roe', per: [109, 16.0, 4.8, 3.3], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 10365, sea urchin, raw gonads', n: { fish: 12, nori: 0.5 }, s: { fish: 10 } },
+  { id: 'tobiko', en: 'Flying fish roe / masago', jp: 'Tobiko', aka: 'masago capelin roe gunkan', cat: 'roe', per: [143, 22.3, 6.42, 1.5], kind: 'usda', src: 'USDA FDC 175132, fish roe, mixed species, raw', n: { fish: 10, nori: 0.5 }, s: { fish: 10, unit: 'spoonful' } },
+  { id: 'tamago', en: 'Sweet egg omelet', jp: 'Tamago', aka: 'egg omelet tamagoyaki', cat: 'roe', per: [146, 10.5, 9.2, 6.5], kind: 'jp', src: 'Japan Standard Tables of Food Composition, 8th ed. (MEXT fooddb) 12018, atsuyaki tamago (sweet rolled omelet)', n: { fish: 25, nori: 0.3 }, s: { fish: 25 } },
+  // ---- sides and sauces (one serving each; the nigiri/sashimi switch doesn't apply) ----
+  { id: 'soy', en: 'Soy sauce', jp: 'Shoyu', aka: 'soy sauce', cat: 'extra', serving: '1 tbsp (16 g)', g: 16, per: [53, 8.14, 0.57, 4.93], kind: 'usda', src: 'USDA FDC 174277, soy sauce (shoyu)' },
+  { id: 'ponzu', en: 'Ponzu', jp: 'Ponzu', aka: 'citrus soy', cat: 'extra', serving: '1 tbsp (15 mL)', g: 16, per: [62.5, 3.1, 0, 12.5], kind: 'label', src: 'Kikkoman Ponzu label: 1 tbsp = 10 kcal, F 0, C 2, P under 1 g' },
+  { id: 'eel-sauce', en: 'Eel sauce', jp: 'Unagi tare', aka: 'eel sauce nitsume', cat: 'extra', serving: '1 tbsp (20 g)', g: 20, per: [200, 5, 0, 50], kind: 'label', src: 'Kikkoman Unagi Sushi Sauce label: 1 tbsp (20 g) = 40 kcal, P 1, F 0, C 10' },
+  { id: 'spicy-mayo', en: 'Spicy mayo', jp: 'Spicy mayo', aka: 'sriracha mayo', cat: 'extra', serving: '1 tbsp (15 g)', g: 15, per: [533, 1.2, 56.3, 5.2], kind: 'est', src: 'Estimate: 3 parts mayonnaise (USDA FDC 171009) to 1 part sriracha' },
+  { id: 'gari', en: 'Pickled ginger', jp: 'Gari', aka: 'ginger', cat: 'extra', serving: 'small mound (15 g)', g: 15, per: [20, 0.33, 0.1, 4.83], kind: 'usda', src: 'USDA FDC 2710082, ginger root, pickled' },
+  { id: 'wasabi', en: 'Wasabi', jp: 'Wasabi', aka: 'horseradish', cat: 'extra', serving: '1 tsp (5 g)', g: 5, per: [292, 2.23, 10.9, 46.1], kind: 'usda', src: 'USDA FDC 171831, wasabi (prepared paste)' },
+  { id: 'miso', en: 'Miso soup', jp: 'Misoshiru', aka: 'miso soup', cat: 'extra', serving: '1 cup (240 g)', g: 240, per: [24, 2.21, 0.85, 2.3], kind: 'usda', src: 'USDA FDC 2707455, soup, miso or tofu' },
+  { id: 'edamame', en: 'Edamame', jp: 'Edamame', aka: 'soybeans', cat: 'extra', serving: 'bowl in pods (85 g beans)', g: 85, per: [121, 11.9, 5.2, 8.91], kind: 'usda', src: 'USDA FDC 168411, edamame, frozen, prepared; about half a typical bowl\'s weight is pods' },
+  { id: 'wakame', en: 'Seaweed salad', jp: 'Wakame salad', aka: 'seaweed salad kaiso', cat: 'extra', serving: 'side (70 g)', g: 70, per: [63, 3.41, 3.06, 7.71], kind: 'est', src: 'USDA FDC 2709990, seaweed, cooked, fat added; restaurant seaweed salad is often sweeter' }
+];
+const CATS = [['all', 'All'], ['fish', 'Fish'], ['shell', 'Shellfish'], ['roe', 'Roe & egg'], ['extra', 'Sides & sauces']];
+const CAT_ORDER = { fish: 0, shell: 1, roe: 2, extra: 3 };
+const KIND_TAG = { usda: '', jp: 'Japan table', lib: 'Your library', label: 'Label', est: 'Estimate' };
+const RICE_OPTS = [[15, 'Small · 15 g'], [22, 'Standard · 22 g'], [28, 'Large · 28 g'], [35, 'Extra large · 35 g']];
+const FISH_OPTS = [[0.75, 'Thin · ×0.75'], [1, 'Standard'], [1.33, 'Thick · ×1.33']];
+const CMULTS = [0.5, 1, 1.5, 2, 3];
+const BY_FOOD = Object.fromEntries(FOODS.map(f => [f.id, f]));
+const LS = 'smt-v1';
+
+const pad = n => String(n).padStart(2, '0');
+const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const f1 = n => { const r = Math.round(n * 10) / 10; return Math.abs(r) >= 10 ? String(Math.round(r)) : String(r); };
+const fq = q => (Math.round(q * 100) / 100).toString();
+const fg = g => (Math.round(g * 10) / 10).toString();
+const band = r => r == null ? 'na' : r <= 12 ? 'lean' : r <= 18 ? 'solid' : r <= 25 ? 'heavy' : 'treat';
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const r1 = x => Math.round(x * 10) / 10;
+
+const state = { date: todayStr(), style: 'n', cat: 'all', q: '', sort: 'ratio', tab: 'menu', rice: 22, fm: 1, open: new Set(), edit: new Set() };
+let days = {};  // date -> entries [{id,itemId,name,q,rice,fm,adj,k,p,f,c,mf}]; k/p/f/c are per piece
+try {
+  const c = JSON.parse(localStorage.getItem(LS) || 'null');
+  if (c && c.days) days = c.days;
+  const p = c && c.prefs;
+  if (p) {
+    if (p.style === 'n' || p.style === 's') state.style = p.style;
+    if (CATS.some(x => x[0] === p.cat)) state.cat = p.cat;
+    if (p.sort) state.sort = p.sort;
+    if (RICE_OPTS.some(x => x[0] === p.rice)) state.rice = p.rice;
+    if (FISH_OPTS.some(x => x[0] === p.fm)) state.fm = p.fm;
+  }
+} catch (e) {}
+let saveFailed = false;
+function saveCache() {
+  try { localStorage.setItem(LS, JSON.stringify({ days, prefs: { style: state.style, cat: state.cat, sort: state.sort, rice: state.rice, fm: state.fm } })); saveFailed = false; }
+  catch (e) { saveFailed = true; }
+  setStatus();
+}
+let persisted = false;
+function setStatus() {
+  const el = document.getElementById('status'), t = document.getElementById('statusText');
+  if (saveFailed) { el.dataset.s = 'warn'; t.textContent = 'Could not save on this phone'; return; }
+  el.dataset.s = persisted ? 'local' : 'warn';
+  t.textContent = persisted ? 'Saved on this phone' : 'Saved on this phone · back up now and then';
+}
+function touch() { saveCache(); }
+
+// ---------- building items ----------
+const vec = (per, g) => ({ k: per[0] * g / 100, p: per[1] * g / 100, f: per[2] * g / 100, c: per[3] * g / 100 });
+// A logged item = parts (fish, rice, nori, sauce, oil). Each entry keeps its rice grams, fish multiplier and part
+// multipliers, plus the per-piece numbers they produced, so later data changes don't move past days.
+function partsFor(food, style, rice, fm) {
+  if (!food || !food.per) return null;
+  if (food.cat === 'extra') return [{ key: 'item', label: food.en + ', ' + food.serving, g: food.g, ...vec(food.per, food.g) }];
+  const sp = food[style]; if (!sp) return null;
+  const fishG = sp.fish * fm, out = [{ key: 'fish', label: food.en + ' (' + food.jp + ')', g: fishG, ...vec(food.per, fishG) }];
+  if (style === 'n') out.push({ key: 'rice', label: PARTS.rice.label, g: rice, ...vec(PARTS.rice.per, rice) });
+  for (const key of ['nori', 'sauce', 'oil']) if (sp[key]) out.push({ key, label: PARTS[key].label, g: sp[key], ...vec(PARTS[key].per, sp[key]) });
+  return out;
+}
+function sumParts(parts, adj) {
+  const t = { k: 0, p: 0, f: 0, c: 0 };
+  for (const x of parts) { const m = adj && adj[x.key] != null ? adj[x.key] : 1; t.k += x.k * m; t.p += x.p * m; t.f += x.f * m; t.c += x.c * m; }
+  return t;
+}
+const ratioOf = (t, food) => (food.cat === 'extra' ? t.p >= 3 : t.p >= 0.5) && t.k > 0 ? t.k / t.p : null;
+function info(itemId, rice, fm) {
+  const [fid, st] = String(itemId).split('.'), food = BY_FOOD[fid];
+  if (!food) return null;
+  const style = food.cat === 'extra' ? 'x' : st;
+  const parts = partsFor(food, style, rice == null ? 22 : rice, fm == null ? 1 : fm);
+  if (!parts) return null;
+  const t = sumParts(parts);
+  return { id: itemId, food, style, parts, ...t, ratio: ratioOf(t, food) };
+}
+const unitOf = (food, style) => food.cat === 'extra' ? 'serving' : style === 'n' ? 'piece' : (food.s.unit || 'slice');
+const plural = (n, u) => n === 1 ? u : (u === 'spoonful' ? 'spoonfuls' : u + 's');
+function itemName(i) { return i.food.cat === 'extra' ? i.food.en : i.food.en + ' ' + (i.style === 'n' ? 'nigiri' : 'sashimi'); }
+function partsDesc(i) {
+  if (i.food.cat === 'extra') return i.food.serving;
+  const fish = i.parts.find(x => x.key === 'fish'), rice = i.parts.find(x => x.key === 'rice');
+  return fg(fish.g) + ' g ' + (i.food.cat === 'roe' && i.food.id !== 'tamago' ? 'topping' : i.food.id === 'tamago' ? 'egg' : i.food.cat === 'shell' ? 'shellfish' : 'fish') + (rice ? ' + ' + fg(rice.g) + ' g rice' : '');
+}
+function entryInfo(e) { return e.itemId ? info(e.itemId, e.rice, e.fm) : null; }
+function makeEntry(itemId) {
+  const i = info(itemId, state.rice, state.fm); if (!i) return null;
+  const e = { id: rid(), itemId, name: itemName(i), q: 1, rice: i.style === 'n' ? state.rice : null, fm: i.food.cat === 'extra' ? null : state.fm };
+  return Object.assign(e, { k: r1(i.k), p: r1(i.p), f: r1(i.f), c: r1(i.c) });
+}
+// re-derive an entry's per-piece numbers from its own rice, fish multiplier and part multipliers
+function recompute(e) {
+  const i = entryInfo(e); if (!i) return e;
+  const adj = e.adj && Object.keys(e.adj).length ? e.adj : null;
+  const t = sumParts(i.parts, adj), out = { ...e, k: r1(t.k), p: r1(t.p), f: r1(t.f), c: r1(t.c), mf: false };
+  if (adj) out.adj = adj; else delete out.adj;
+  return out;
+}
+
+// ---------- day data ----------
+const dayEntries = () => days[state.date] || [];
+function totals(list) {
+  const t = { k: 0, p: 0, f: 0, c: 0, n: 0, pcs: 0 };
+  for (const e of list) { const q = +e.q || 0; t.k += e.k * q; t.p += e.p * q; t.f += e.f * q; t.c += e.c * q; t.n += 1; t.pcs += q; }
+  return t;
+}
+function entryFor(itemId) { return dayEntries().find(e => e.itemId === itemId); }
+function setDay(list) { if (list.length) days[state.date] = list; else delete days[state.date]; touch(); renderAll(); }
+function addItem(itemId) { const e = makeEntry(itemId); if (!e) return; setDay(dayEntries().concat([e])); }
+function removeItem(itemId) { setDay(dayEntries().filter(e => e.itemId !== itemId)); }
+function removeEntry(entryId) { setDay(dayEntries().filter(e => e.id !== entryId)); }
+function setQty(entryId, q) { setDay(dayEntries().map(e => e.id === entryId ? { ...e, q, mf: false } : e)); }
+function stepQty(entryId, d) {
+  const e = dayEntries().find(x => x.id === entryId); if (!e) return;
+  const q = Math.round(((+e.q || 0) + d) * 100) / 100;
+  if (q < 1) return;
+  setQty(entryId, Math.min(99, q));
+}
+function setPart(entryId, key, m) {
+  setDay(dayEntries().map(e => {
+    if (e.id !== entryId) return e;
+    const adj = { ...(e.adj || {}) };
+    if (m === 1) delete adj[key]; else adj[key] = m;
+    return recompute({ ...e, adj });
+  }));
+}
+function adjText(e) {
+  const a = e.adj || {}, keys = Object.keys(a); if (!keys.length) return '';
+  const lab = k => k === 'fish' ? 'fish' : k === 'rice' ? 'rice' : k === 'nori' ? 'nori' : k === 'sauce' ? 'sauce' : k === 'oil' ? 'oil' : 'portion';
+  const no = keys.filter(k => a[k] === 0).map(lab);
+  return [no.length ? 'no ' + no.join(', ') : ''].concat(keys.filter(k => a[k] !== 0).map(k => lab(k) + ' x' + fq(a[k]))).filter(Boolean).join('; ');
+}
+const entryName = e => { const t = adjText(e); return t ? e.name + ' [' + t + ']' : e.name; };
+function entryDesc(e) {
+  const i = entryInfo(e);
+  if (!i) return e.loc || 'Added by you';
+  return i.food.jp + ' · ' + partsDesc(i);
+}
+const entryUnit = e => { const i = entryInfo(e); return i ? unitOf(i.food, i.style) : 'serving'; };
+
+// ---------- rendering ----------
+function stepper(e) {
+  const q = +e.q || 0, u = entryUnit(e);
+  return `<span class="stp" role="group" aria-label="Count"><button type="button" data-step="-1" data-entry="${esc(e.id)}" aria-label="One fewer"${q <= 1 ? ' disabled' : ''}>&minus;</button><b>${fq(q)}</b><button type="button" data-step="1" data-entry="${esc(e.id)}" aria-label="One more">+</button></span><span>${plural(q, u)}</span>`;
+}
+function partEditor(e) {
+  const i = entryInfo(e); if (!i) return '';
+  const a = e.adj || {};
+  const rows = i.parts.map(x => {
+    const m = a[x.key] != null ? a[x.key] : 1, on = m > 0, sm = on ? m : 1;
+    const opts = CMULTS.includes(sm) ? CMULTS : CMULTS.concat([sm]).sort((p, q) => p - q);
+    const sel = `<select class="cmq" data-entry="${esc(e.id)}" data-key="${x.key}" aria-label="Amount of ${esc(x.label)}"${on ? '' : ' disabled'}>${opts.map(q => `<option value="${q}"${q === sm ? ' selected' : ''}>×${fq(q)}</option>`).join('')}</select>`;
+    const w = on ? m : 1;
+    return `<div class="crow${on ? '' : ' off'}${on && m !== 1 ? ' chg' : ''}"><label class="cl"><input type="checkbox" class="cck" data-entry="${esc(e.id)}" data-key="${x.key}"${on ? ' checked' : ''}><span>${esc(x.label)}</span></label>${sel}<span class="cg">${fg(x.g * w)} g · ${f1(x.k * w)} kcal · P ${f1(x.p * w)} · F ${f1(x.f * w)} · C ${f1(x.c * w)}${on ? '' : ' · not counted'}</span></div>`;
+  }).join('');
+  return `<div class="cmp" role="group" aria-label="Parts of ${esc(e.name)}"><p class="cmphelp">Per piece. Untick anything you left (rice you didn't eat, say), or change a multiplier for a thin or thick cut.</p>${rows}</div>`;
+}
+function renderDay() {
+  const inp = document.getElementById('dateInput'); if (inp.value !== state.date) inp.value = state.date;
+  const [y, m, d] = state.date.split('-').map(Number);
+  document.getElementById('dayLabel').textContent = new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + (state.date === todayStr() ? ' · today' : '');
+  const t = totals(dayEntries());
+  document.getElementById('tK').textContent = fmt(t.k);
+  document.getElementById('tP').innerHTML = fmt(t.p) + '<small>g</small>';
+  document.getElementById('tF').innerHTML = fmt(t.f) + '<small>g</small>';
+  document.getElementById('tC').innerHTML = fmt(t.c) + '<small>g</small>';
+  const r = t.p >= 3 ? t.k / t.p : null;
+  document.getElementById('tR').innerHTML = r == null ? '–' : `<span class="chip ${band(r)}" style="font-size:20px;padding:2px 10px">${r.toFixed(1)}</span>`;
+  document.getElementById('tab-log').textContent = 'Day log (' + fq(t.pcs) + ')';
+}
+const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’‘`]/g, "'");
+const qWords = q => fold(q).split(/[\s,]+/).filter(Boolean);
+const hasAll = (hay, words) => { const h = fold(hay); return words.every(w => h.includes(w)); };
+function menuItems() {
+  const out = [];
+  for (const f of FOODS) {
+    if (state.cat !== 'all' && f.cat !== state.cat) continue;
+    if (!hasAll(f.en + ' ' + f.jp + ' ' + (f.aka || ''), qWords(state.q))) continue;
+    const i = info(f.id + '.' + (f.cat === 'extra' ? 'x' : state.style), state.rice, state.fm);
+    if (i) out.push(i);
+  }
+  return out;
+}
+function sorted(list) {
+  const s = state.sort, nm = i => i.food.en;
+  return list.slice().sort((a, b) => {
+    const xa = a.food.cat === 'extra', xb = b.food.cat === 'extra';
+    if (xa !== xb) return xa ? 1 : -1;  // sides and sauces always come after the sushi
+    if (s === 'p') return b.p - a.p || a.k - b.k;
+    if (s === 'k') return a.k - b.k;
+    if (s === 'name') return nm(a).localeCompare(nm(b));
+    if (s === 'type') return CAT_ORDER[a.food.cat] - CAT_ORDER[b.food.cat] || nm(a).localeCompare(nm(b));
+    const ar = a.ratio == null ? 999 : a.ratio, br = b.ratio == null ? 999 : b.ratio;
+    return ar - br || a.k - b.k;
+  });
+}
+function menuRow(i) {
+  const e = entryFor(i.id), on = !!e, b = band(i.ratio), f = i.food;
+  const tag = KIND_TAG[f.kind] ? `<span class="tag${f.kind === 'lib' ? ' lib' : f.kind === 'label' ? ' pub' : ''}">${KIND_TAG[f.kind]}</span>` : '';
+  const adj = on && e.adj ? `<span class="adjl"><b>${esc(adjText(e))}</b></span>` : '';
+  const qty = on ? `<div class="qtywrap">${stepper(e)}${adj}</div>` : '';
+  const sub = f.cat === 'extra' ? f.jp + ' · ' + f.serving : f.jp + ' · ' + partsDesc(i);
+  let det = '';
+  if (state.open.has(i.id)) {
+    const rows = i.parts.map(x => `<tr><td>${esc(x.label)}</td><td class="g">${fg(x.g)} g</td><td class="kc">${f1(x.k)} kcal</td></tr>`).join('');
+    const extra = i.parts.filter(x => x.key !== 'fish' && x.key !== 'item').map(x => PARTS[x.key] && PARTS[x.key].src).filter(Boolean);
+    det = `<div class="det"><div class="meta"><span>Per 100 g ${f.cat === 'extra' ? '' : f.cat === 'roe' ? 'topping' : 'fish'}: <b>${f1(f.per[0])} kcal</b> · P <b>${f1(f.per[1])}</b> · F <b>${f1(f.per[2])}</b> · C <b>${f1(f.per[3])}</b></span></div><table>${rows}</table>${f.note ? `<div>${esc(f.note)}</div>` : ''}<div class="src">Source: ${[f.src].concat(extra).map(x => esc(String(x).replace(/\.\s*$/, ''))).join('. ')}.</div></div>`;
+  }
+  return `<div class="mrow${on ? ' on' : ''}"><div class="mg">
+    <div class="ckc"><input type="checkbox" class="ck" data-item="${esc(i.id)}" ${on ? 'checked' : ''} aria-label="Ate ${esc(itemName(i))}"></div>
+    <div class="nm"><button type="button" class="it" data-open="${esc(i.id)}" aria-expanded="${state.open.has(i.id)}">${esc(f.en)}${tag}</button><span class="lc">${esc(sub)}</span>${qty}</div>
+    <div class="n k" data-l="kcal">${fmt(i.k)}</div><div class="n p" data-l="Prot">${f1(i.p)}</div><div class="n f" data-l="Fat">${f1(i.f)}</div><div class="n c" data-l="Carb">${f1(i.c)}</div>
+    <div class="n r"><span class="chip ${b}" title="${i.ratio == null ? 'Too little protein to rate' : Math.round(400 / i.ratio) + '% of calories from protein'}">${i.ratio == null ? 'n/a' : i.ratio.toFixed(1)}</span></div>
+  </div>${det}</div>`;
+}
+function renderMenu() {
+  const list = sorted(menuItems());
+  document.getElementById('menuRows').innerHTML = list.length ? list.map(menuRow).join('') : '<div class="empty">Nothing matches. Clear the search or pick another type.</div>';
+  const nFood = FOODS.filter(f => f.cat !== 'extra').length;
+  document.getElementById('count').textContent = list.length + ' items · ' + (state.style === 'n' ? 'per nigiri piece, ' + state.rice + ' g rice' : 'per sashimi slice') + (state.fm !== 1 ? ', fish ×' + fq(state.fm) : '') + ' · sides are per serving';
+  document.getElementById('mheadItem').textContent = state.style === 'n' ? 'Per nigiri piece' : 'Per sashimi slice';
+  document.querySelectorAll('.stylesw button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.style === state.style)));
+  document.querySelectorAll('#catSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cat === state.cat)));
+  document.getElementById('sortSel').value = state.sort;
+  document.getElementById('riceSel').value = String(state.rice);
+  document.getElementById('fishSel').value = String(state.fm);
+  document.getElementById('riceSel').disabled = state.style !== 'n';
+  renderPortMsg();
+  void nFood;
+}
+// After changing rice or fish size, offer to apply it to this day's items logged at another size.
+function stale() {
+  return dayEntries().filter(e => { const i = entryInfo(e); return i && i.food.cat !== 'extra' && ((i.style === 'n' && e.rice !== state.rice) || e.fm !== state.fm); });
+}
+function renderPortMsg() {
+  const el = document.getElementById('portMsg'), n = stale().length;
+  if (!n) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = `<span>${n} item${n === 1 ? '' : 's'} on this day ${n === 1 ? 'was' : 'were'} logged at another rice or fish size.</span><button type="button" class="btn" id="applyPort">Use the current sizes for ${n === 1 ? 'it' : 'them'}</button>`;
+}
+function applyPortions() {
+  setDay(dayEntries().map(e => {
+    const i = entryInfo(e); if (!i || i.food.cat === 'extra') return e;
+    return recompute({ ...e, rice: i.style === 'n' ? state.rice : null, fm: state.fm });
+  }));
+}
+function renderLog() {
+  const list = dayEntries(), el = document.getElementById('logRows');
+  if (!list.length) { el.innerHTML = '<div class="empty">Nothing logged for this day yet. Check items in the menu, or add something not listed.</div>'; return; }
+  el.innerHTML = list.map(e => {
+    const q = +e.q || 0, i = entryInfo(e), ok = !!i && i.parts.length >= 2, open = ok && state.edit.has(e.id), t = adjText(e);
+    const bar = ok || t ? `<div class="cbar">${ok ? `<button type="button" class="lnk" data-cmp="${esc(e.id)}" aria-expanded="${open}">${open ? 'Done adjusting' : 'Adjust rice and fish'}</button>` : ''}${t ? `<span class="adjl">Adjusted: <b>${esc(t)}</b></span>` : ''}</div>` : '';
+    const ctl = i ? stepper(e) : `<span class="tn">×${fq(q)}</span>`;
+    return `<div class="lrow"><div class="nm2">${esc(e.name)}<div class="lc">${esc(entryDesc(e))} · ${fmt(e.k)} kcal each</div></div>
+      <div class="lctl">${ctl}<button type="button" class="btn x" data-del="${esc(e.id)}" aria-label="Remove ${esc(e.name)}">Remove</button></div>
+      <div class="mac"><span><b>${fmt(e.k * q)}</b> kcal</span><span>P <b>${fmt(e.p * q)}</b></span><span>F <b>${fmt(e.f * q)}</b></span><span>C <b>${fmt(e.c * q)}</b></span></div>${bar}${open ? partEditor(e) : ''}</div>`;
+  }).join('');
+}
+function renderHistory() {
+  const ds = Object.keys(days).filter(d => (days[d] || []).length).sort().reverse();
+  const el = document.getElementById('histRows');
+  if (!ds.length) { el.innerHTML = '<div class="empty">Days you log will appear here.</div>'; return; }
+  el.innerHTML = ds.map(d => {
+    const t = totals(days[d]); const [y, m, dd] = d.split('-').map(Number);
+    const lab = new Date(y, m - 1, dd).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const r = t.p >= 3 ? (t.k / t.p).toFixed(1) : 'n/a';
+    return `<button type="button" class="hrow${d === state.date ? ' cur' : ''}" data-day="${d}"><span class="d">${lab}</span><span class="tn">${fq(t.pcs)} pc</span>
+      <span class="s"><b>${fmt(t.k)}</b> kcal · P <b>${fmt(t.p)}</b> · F <b>${fmt(t.f)}</b> · C <b>${fmt(t.c)}</b> · ${r} kcal/g P</span></button>`;
+  }).join('');
+}
+// recent: one row per distinct item (same item, rice, fish size and adjustments), newest first
+const RECENT_MAX = 40;
+let recentIndex = new Map();
+function recentKey(e) {
+  const a = e.adj && Object.keys(e.adj).length ? '|a:' + Object.keys(e.adj).sort().map(k => k + '=' + e.adj[k]).join(',') : '';
+  return e.itemId ? 'i:' + e.itemId + '|r:' + (e.rice == null ? '' : e.rice) + '|f:' + (e.fm == null ? '' : e.fm) + a : 'c:' + String(e.name).toLowerCase() + '|' + e.k + '|' + e.p + '|' + e.f + '|' + e.c;
+}
+function recentList() {
+  const map = new Map();
+  for (const d of Object.keys(days).sort()) (days[d] || []).forEach((e, i) => {
+    if (!e || typeof e.name !== 'string') return;
+    const key = recentKey(e), cur = map.get(key) || { key, n: 0, last: '', sd: '', so: 0 };
+    if (cur.last !== d) cur.n += 1;
+    cur.e = e; cur.last = d;
+    if (d !== state.date || !cur.other) { cur.sd = d; cur.so = i; cur.other = cur.other || d !== state.date; }
+    map.set(key, cur);
+  });
+  return [...map.values()].sort((a, b) => b.sd.localeCompare(a.sd) || b.so - a.so).slice(0, RECENT_MAX);
+}
+function shortDay(d) {
+  if (d === todayStr()) return 'today';
+  const [y, m, dd] = d.split('-').map(Number);
+  return new Date(y, m - 1, dd).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function renderRecent() {
+  const list = recentList(), el = document.getElementById('recentRows');
+  recentIndex = new Map(list.map(r => [r.key, r]));
+  if (!list.length) { el.innerHTML = '<div class="empty">Items you log will show up here so you can add them again with one tick.</div>'; return; }
+  const onDay = new Set(dayEntries().map(recentKey));
+  el.innerHTML = list.map(r => {
+    const e = r.e, on = onDay.has(r.key), name = entryName(e);
+    const meta = [entryDesc(e), 'last ' + shortDay(r.last), r.n > 1 ? r.n + ' days' : ''].filter(Boolean).join(' · ');
+    return `<div class="rrow${on ? ' on' : ''}"><input type="checkbox" class="ck rck" data-rkey="${esc(r.key)}" ${on ? 'checked' : ''} aria-label="${on ? 'Remove' : 'Add'} ${esc(name)} ${on ? 'from' : 'to'} this day">
+      <div class="nm2">${esc(name)}<div class="lc">${esc(meta)}</div></div>
+      <div class="mac"><span>each</span><span><b>${fmt(e.k)}</b> kcal</span><span>P <b>${f1(e.p)}</b></span><span>F <b>${f1(e.f)}</b></span><span>C <b>${f1(e.c)}</b></span></div></div>`;
+  }).join('');
+}
+function toggleRecent(key, add) {
+  const r = recentIndex.get(key); if (!r) return;
+  if (!add) { setDay(dayEntries().filter(e => recentKey(e) !== key)); return; }
+  const e = r.e, x = { id: rid(), itemId: e.itemId || null, name: e.name, q: 1, k: +e.k || 0, p: +e.p || 0, f: +e.f || 0, c: +e.c || 0 };
+  if (e.itemId) { x.rice = e.rice == null ? null : e.rice; x.fm = e.fm == null ? null : e.fm; if (e.adj) x.adj = { ...e.adj }; }
+  else x.loc = e.loc || 'Added by you';
+  setDay(dayEntries().concat([x]));
+}
+function renderTabs() {
+  document.body.dataset.tab = state.tab;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === state.tab)));
+}
+function renderMF() {
+  const list = dayEntries(), el = document.getElementById('mfRows');
+  if (!list.length) { el.innerHTML = '<div class="empty">Logged items appear here with their Quick Add values.</div>'; return; }
+  const done = list.filter(e => e.mf).length;
+  const btn = (lab, val) => `<button type="button" class="mfv" data-copy="${esc(val)}" aria-label="Copy ${lab} ${esc(val)}"><span>${lab}</span><b>${esc(val)}</b></button>`;
+  el.innerHTML = `<div class="mfhead">${done} of ${list.length} entered in MacroFactor</div>` + list.map(e => {
+    const q = +e.q || 0, name = entryName(e) + (q !== 1 ? ' x' + fq(q) : '');
+    return `<div class="mfrow${e.mf ? ' done' : ''}"><div class="mfn"><button type="button" class="mfname" data-copy="${esc(name)}" aria-label="Copy name">${esc(name)}</button>
+      <label class="mfck"><input type="checkbox" class="mfdone" data-entry="${esc(e.id)}" ${e.mf ? 'checked' : ''}> Entered</label></div>
+      <div class="mfvals">${btn('Calories', Math.round(e.k * q))}${btn('Protein', Math.round(e.p * q))}${btn('Fat', Math.round(e.f * q))}${btn('Carbs', Math.round(e.c * q))}</div></div>`;
+  }).join('');
+}
+function renderAll() { renderDay(); renderMenu(); renderLog(); renderMF(); renderRecent(); renderHistory(); renderTabs(); setStatus(); }
+function selectText(el) { try { const r = document.createRange(); r.selectNodeContents(el.querySelector('b') || el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) {} }
+
+let msgTimer;
+function showMsg(text, err) {
+  const m = document.getElementById('logMsg'); m.textContent = text; m.className = 'msg' + (err ? ' err' : '');
+  clearTimeout(msgTimer); if (!err) msgTimer = setTimeout(() => { m.textContent = ''; }, 3500);
+}
+
+// ---------- events ----------
+document.getElementById('mfRows').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-copy]'); if (!b) return;
+  const val = b.dataset.copy, m = document.getElementById('mfMsg');
+  const ok = () => { document.querySelectorAll('.copied').forEach(x => x.classList.remove('copied')); b.classList.add('copied'); m.textContent = 'Copied ' + val; m.className = 'msg'; };
+  const fail = () => { selectText(b); m.textContent = 'Copy is blocked here; the value is selected, so use your phone\'s Copy.'; m.className = 'msg'; };
+  try { navigator.clipboard.writeText(val).then(ok, fail); } catch (e) { fail(); }
+});
+document.getElementById('mfRows').addEventListener('change', ev => {
+  const t = ev.target; if (!t.matches('input.mfdone')) return;
+  setDay(dayEntries().map(e => e.id === t.dataset.entry ? { ...e, mf: t.checked } : e));
+});
+function partChange(t) {
+  if (t.matches('input.cck')) { setPart(t.dataset.entry, t.dataset.key, t.checked ? 1 : 0); return true; }
+  if (t.matches('select.cmq')) { setPart(t.dataset.entry, t.dataset.key, parseFloat(t.value)); return true; }
+  return false;
+}
+function stepClick(ev) { const s = ev.target.closest('[data-step]'); if (!s) return false; stepQty(s.dataset.entry, +s.dataset.step); return true; }
+document.getElementById('menuRows').addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.matches('input.ck')) { t.checked ? addItem(t.dataset.item) : removeItem(t.dataset.item); }
+});
+document.getElementById('menuRows').addEventListener('click', ev => {
+  if (stepClick(ev)) return;
+  const b = ev.target.closest('[data-open]'); if (!b) return;
+  const id = b.dataset.open; state.open.has(id) ? state.open.delete(id) : state.open.add(id); renderMenu();
+});
+document.getElementById('logRows').addEventListener('change', ev => { partChange(ev.target); });
+document.getElementById('logRows').addEventListener('click', ev => {
+  if (stepClick(ev)) return;
+  const b = ev.target.closest('[data-del]'); if (b) { removeEntry(b.dataset.del); return; }
+  const c = ev.target.closest('[data-cmp]'); if (!c) return;
+  const id = c.dataset.cmp; state.edit.has(id) ? state.edit.delete(id) : state.edit.add(id); renderLog();
+});
+document.getElementById('recentRows').addEventListener('change', ev => {
+  const t = ev.target; if (t.matches('input.rck')) toggleRecent(t.dataset.rkey, t.checked);
+});
+document.getElementById('histRows').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-day]'); if (!b) return; state.date = b.dataset.day; state.tab = 'log'; renderAll();
+});
+document.getElementById('portMsg').addEventListener('click', ev => { if (ev.target.closest('#applyPort')) applyPortions(); });
+document.querySelectorAll('.stylesw button').forEach(b => b.addEventListener('click', () => { state.style = b.dataset.style; saveCache(); renderMenu(); }));
+document.getElementById('catSeg').innerHTML = CATS.map(([v, l]) => `<button type="button" data-cat="${v}">${l}</button>`).join('');
+document.querySelectorAll('#catSeg button').forEach(b => b.addEventListener('click', () => { state.cat = b.dataset.cat; saveCache(); renderMenu(); }));
+document.getElementById('riceSel').innerHTML = RICE_OPTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+document.getElementById('fishSel').innerHTML = FISH_OPTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+document.getElementById('riceSel').addEventListener('change', e => { state.rice = +e.target.value; saveCache(); renderMenu(); });
+document.getElementById('fishSel').addEventListener('change', e => { state.fm = +e.target.value; saveCache(); renderMenu(); });
+document.getElementById('qFood').addEventListener('input', e => { state.q = e.target.value.trim(); renderMenu(); });
+document.getElementById('qFood').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+document.getElementById('sortSel').addEventListener('change', e => { state.sort = e.target.value; saveCache(); renderMenu(); });
+document.getElementById('clearFilters').addEventListener('click', () => { state.q = ''; state.cat = 'all'; document.getElementById('qFood').value = ''; saveCache(); renderMenu(); });
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => { state.tab = b.dataset.tab; renderTabs(); window.scrollTo({ top: 0 }); }));
+function shiftDay(n) { const [y, m, d] = state.date.split('-').map(Number); const dt = new Date(y, m - 1, d + n); state.date = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()); renderAll(); }
+document.getElementById('prevDay').addEventListener('click', () => shiftDay(-1));
+document.getElementById('nextDay').addEventListener('click', () => shiftDay(1));
+document.getElementById('todayBtn').addEventListener('click', () => { state.date = todayStr(); renderAll(); });
+document.getElementById('dateInput').addEventListener('change', e => { if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) { state.date = e.target.value; renderAll(); } });
+
+const form = document.getElementById('customForm');
+document.getElementById('toggleCustom').addEventListener('click', () => { form.hidden = !form.hidden; if (!form.hidden) document.getElementById('cName').focus(); });
+document.getElementById('cancelCustom').addEventListener('click', () => { form.hidden = true; });
+form.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const name = document.getElementById('cName').value.trim();
+  const num = id => Math.max(0, parseFloat(document.getElementById(id).value) || 0);
+  if (!name) return;
+  setDay(dayEntries().concat([{ id: rid(), itemId: null, name, loc: 'Added by you', q: 1, k: num('cK'), p: num('cP'), f: num('cF'), c: num('cC') }]));
+  form.reset(); form.hidden = true; showMsg('Added ' + name + '.');
+});
+document.getElementById('copyLog').addEventListener('click', () => {
+  const list = dayEntries();
+  if (!list.length) { showMsg('Nothing to copy for this day.'); return; }
+  const lines = list.map(e => { const q = +e.q || 0; return `${state.date} | ${entryName(e)} (${entryDesc(e)}) x${fq(q)} | ${fmt(e.k * q)} kcal | P ${fmt(e.p * q)} | F ${fmt(e.f * q)} | C ${fmt(e.c * q)}`; });
+  const t = totals(list);
+  lines.push(`${state.date} | Day total, ${fq(t.pcs)} pieces/servings | ${fmt(t.k)} kcal | P ${fmt(t.p)} | F ${fmt(t.f)} | C ${fmt(t.c)} | Sushi tracker estimates`);
+  const text = lines.join('\n');
+  const box = document.getElementById('copyBox'), wrap = document.getElementById('copyWrap');
+  const fallback = () => { box.value = text; wrap.hidden = false; box.focus(); box.select(); showMsg('Select all and copy the text below.'); };
+  try { navigator.clipboard.writeText(text).then(() => { wrap.hidden = true; showMsg('Copied ' + list.length + ' lines plus the day total.'); }, fallback); } catch (e) { fallback(); }
+});
+
+// install prompt (Chrome on Android and desktop)
+let deferredInstall = null;
+const installBtn = document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; installBtn.hidden = false; });
+installBtn.addEventListener('click', async () => { if (!deferredInstall) return; deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch (e) {} deferredInstall = null; installBtn.hidden = true; });
+window.addEventListener('appinstalled', () => { installBtn.hidden = true; });
+if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) document.getElementById('installHint').hidden = true;
+// backup and restore
+function backupMsg(text, err) { const m = document.getElementById('backupMsg'); m.textContent = text; m.className = 'msg' + (err ? ' err' : ''); }
+document.getElementById('backupBtn').addEventListener('click', () => {
+  const payload = { app: 'sushi-macro-tracker', format: 1, exported: new Date().toISOString(), days };
+  const blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sushi-macro-log-' + todayStr() + '.json';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  const n = Object.keys(days).filter(d => (days[d] || []).length).length;
+  backupMsg('Saved a backup of ' + n + ' day' + (n === 1 ? '' : 's') + ' to Downloads.');
+});
+document.getElementById('restoreBtn').addEventListener('click', () => document.getElementById('restoreFile').click());
+function cleanEntry(e) {
+  if (!(e && e.id && typeof e.name === 'string')) return null;
+  const num = v => (Number.isFinite(+v) && +v >= 0 ? +v : 0);
+  const x = { id: String(e.id), itemId: typeof e.itemId === 'string' ? e.itemId : null, name: e.name, q: num(e.q) || 1, k: num(e.k), p: num(e.p), f: num(e.f), c: num(e.c), mf: !!e.mf };
+  if (x.itemId) {
+    x.rice = e.rice == null ? null : num(e.rice); x.fm = e.fm == null ? null : num(e.fm);
+    if (e.adj && typeof e.adj === 'object') { const a = {}; for (const [k, v] of Object.entries(e.adj)) if (/^[a-z]+$/.test(k) && Number.isFinite(+v) && +v >= 0) a[k] = +v; if (Object.keys(a).length) x.adj = a; }
+  } else x.loc = typeof e.loc === 'string' ? e.loc : 'Added by you';
+  return x;
+}
+document.getElementById('restoreFile').addEventListener('change', async ev => {
+  const f = ev.target.files && ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || data.app !== 'sushi-macro-tracker' || typeof data.days !== 'object') throw new Error('not a tracker backup');
+    let added = 0;
+    for (const [d, list] of Object.entries(data.days)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Array.isArray(list)) continue;
+      const cur = days[d] ? days[d].slice() : []; const ids = new Set(cur.map(e => e.id));
+      for (const e of list) { const x = cleanEntry(e); if (!x || ids.has(x.id)) continue; cur.push(x); ids.add(x.id); added++; }
+      if (cur.length) days[d] = cur;
+    }
+    saveCache(); renderAll(); backupMsg('Restored ' + added + ' item' + (added === 1 ? '' : 's') + ' from the backup.');
+  } catch (e) { backupMsg('That file is not a sushi tracker backup, so nothing changed.', true); }
+});
+document.getElementById('appVer').textContent = APP_VERSION;
+renderAll();
+(async () => {
+  try { if (navigator.storage && navigator.storage.persist) persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); } catch (e) {}
+  setStatus();
+  if ('serviceWorker' in navigator && location.protocol === 'https:') { try { await navigator.serviceWorker.register('sw.js'); } catch (e) {} }
+})();
+</script>
+
+</body>
+</html>
