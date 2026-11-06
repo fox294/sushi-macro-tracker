@@ -123,6 +123,9 @@ input[type=search],input[type=text],input[type=number],select{font-size:15px;bac
 .stp button:disabled{color:var(--line);cursor:default}
 .stp b{min-width:30px;text-align:center;font-variant-numeric:tabular-nums;font-size:15px}
 .stp+span{font-size:13px;color:var(--muted)}
+.rcnt{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap}
+.rcnt select{width:auto;padding:4px 6px;font-size:15px;border-color:var(--accent);font-weight:600}
+.rcnt.part select{background:var(--heavy-bg);border-color:var(--heavy);color:var(--ink)}
 /* part editor: untick a part, or change its multiplier */
 .cmp{display:grid;gap:0;max-width:520px}
 .cmphelp{margin:0 0 4px;font-size:12.5px;color:var(--muted)}
@@ -322,7 +325,7 @@ footer p{margin:0}
 </div>
 
 <script>
-const APP_VERSION = '2026-11-06.1';
+const APP_VERSION = '2026-11-06.2';
 // ---------- food data ----------
 // Per 100 g edible portion: [kcal, protein g, fat g, carbs g]. n = nigiri per piece, s = sashimi per slice (grams).
 // src kinds: usda = USDA FoodData Central; jp = Japan Standard Tables of Food Composition 2020 (8th ed.);
@@ -403,7 +406,9 @@ const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 const r1 = x => Math.round(x * 10) / 10;
 
 const state = { date: todayStr(), style: 'n', cat: 'all', q: '', sort: 'ratio', tab: 'menu', rice: 22, fm: 1, open: new Set(), edit: new Set() };
-let days = {};  // date -> entries [{id,itemId,name,q,rice,fm,adj,k,p,f,c,mf}]; k/p/f/c are per piece
+let days = {};  // date -> entries [{id,itemId,name,q,rice,fm,adj,k,p,f,c,r,rq,mf}]
+// k/p/f/c are per piece as served (nigiri: fish + rice). r = the rice part of one piece {k,p,f,c};
+// rq = how many of the q pieces were eaten with their rice (missing = all of them).
 try {
   const c = JSON.parse(localStorage.getItem(LS) || 'null');
   if (c && c.days) days = c.days;
@@ -471,7 +476,15 @@ function entryInfo(e) { return e.itemId ? info(e.itemId, e.rice, e.fm) : null; }
 function makeEntry(itemId) {
   const i = info(itemId, state.rice, state.fm); if (!i) return null;
   const e = { id: rid(), itemId, name: itemName(i), q: 1, rice: i.style === 'n' ? state.rice : null, fm: i.food.cat === 'extra' ? null : state.fm };
-  return Object.assign(e, { k: r1(i.k), p: r1(i.p), f: r1(i.f), c: r1(i.c) });
+  Object.assign(e, { k: r1(i.k), p: r1(i.p), f: r1(i.f), c: r1(i.c) });
+  const r = ricePart(i, null); if (r) e.r = r;
+  return e;
+}
+// the rice part of one piece, after the entry's own rice multiplier; null when the item has no rice
+function ricePart(i, adj) {
+  const x = i && i.parts.find(y => y.key === 'rice'); if (!x) return null;
+  const m = adj && adj.rice != null ? adj.rice : 1;
+  return { k: r1(x.k * m), p: r1(x.p * m), f: r1(x.f * m), c: r1(x.c * m) };
 }
 // re-derive an entry's per-piece numbers from its own rice, fish multiplier and part multipliers
 function recompute(e) {
@@ -479,14 +492,28 @@ function recompute(e) {
   const adj = e.adj && Object.keys(e.adj).length ? e.adj : null;
   const t = sumParts(i.parts, adj), out = { ...e, k: r1(t.k), p: r1(t.p), f: r1(t.f), c: r1(t.c), mf: false };
   if (adj) out.adj = adj; else delete out.adj;
+  const r = ricePart(i, adj); if (r) out.r = r; else { delete out.r; delete out.rq; }
   return out;
+}
+// entries logged before rice counts existed: add their rice part (numbers unchanged)
+function migrate() {
+  for (const d of Object.keys(days)) days[d] = (days[d] || []).map(e => {
+    if (!e || e.r || !e.itemId) return e;
+    const i = entryInfo(e), r = i && ricePart(i, e.adj); return r ? { ...e, r } : e;
+  });
 }
 
 // ---------- day data ----------
 const dayEntries = () => days[state.date] || [];
+// pieces eaten with rice; the rest count the fish only
+const riceOn = e => { const q = +e.q || 0; return e.r && e.rq != null ? Math.max(0, Math.min(q, e.rq)) : q; };
+function tot(e) {
+  const q = +e.q || 0, off = e.r ? q - riceOn(e) : 0, r = e.r || { k: 0, p: 0, f: 0, c: 0 };
+  return { k: Math.max(0, e.k * q - r.k * off), p: Math.max(0, e.p * q - r.p * off), f: Math.max(0, e.f * q - r.f * off), c: Math.max(0, e.c * q - r.c * off) };
+}
 function totals(list) {
   const t = { k: 0, p: 0, f: 0, c: 0, n: 0, pcs: 0 };
-  for (const e of list) { const q = +e.q || 0; t.k += e.k * q; t.p += e.p * q; t.f += e.f * q; t.c += e.c * q; t.n += 1; t.pcs += q; }
+  for (const e of list) { const x = tot(e); t.k += x.k; t.p += x.p; t.f += x.f; t.c += x.c; t.n += 1; t.pcs += +e.q || 0; }
   return t;
 }
 function entryFor(itemId) { return dayEntries().find(e => e.itemId === itemId); }
@@ -494,7 +521,25 @@ function setDay(list) { if (list.length) days[state.date] = list; else delete da
 function addItem(itemId) { const e = makeEntry(itemId); if (!e) return; setDay(dayEntries().concat([e])); }
 function removeItem(itemId) { setDay(dayEntries().filter(e => e.itemId !== itemId)); }
 function removeEntry(entryId) { setDay(dayEntries().filter(e => e.id !== entryId)); }
-function setQty(entryId, q) { setDay(dayEntries().map(e => e.id === entryId ? { ...e, q, mf: false } : e)); }
+function setQty(entryId, q) {
+  setDay(dayEntries().map(e => {
+    if (e.id !== entryId) return e;
+    const x = { ...e, q, mf: false };
+    // a rice count follows the piece count until you set it; it never exceeds the pieces
+    if (x.rq != null) { if (x.rq >= q) delete x.rq; }
+    return x;
+  }));
+}
+function setRiceCount(entryId, n) {
+  setDay(dayEntries().map(e => {
+    if (e.id !== entryId) return e;
+    const x = { ...e, mf: false };
+    if (n >= (+e.q || 0)) delete x.rq; else x.rq = Math.max(0, n);
+    return x;
+  }));
+}
+const riceNote = e => e.r && riceOn(e) !== (+e.q || 0) ? 'rice on ' + fq(riceOn(e)) + ' of ' + fq(+e.q || 0) : '';
+const entryLabel = e => { const n = riceNote(e); return entryName(e) + (n ? ' (' + n + ')' : ''); };
 function stepQty(entryId, d) {
   const e = dayEntries().find(x => x.id === entryId); if (!e) return;
   const q = Math.round(((+e.q || 0) + d) * 100) / 100;
@@ -528,6 +573,12 @@ function stepper(e) {
   const q = +e.q || 0, u = entryUnit(e);
   return `<span class="stp" role="group" aria-label="Count"><button type="button" data-step="-1" data-entry="${esc(e.id)}" aria-label="One fewer"${q <= 1 ? ' disabled' : ''}>&minus;</button><b>${fq(q)}</b><button type="button" data-step="1" data-entry="${esc(e.id)}" aria-label="One more">+</button></span><span>${plural(q, u)}</span>`;
 }
+function riceCount(e) {
+  if (!e.r || !(e.r.k > 0)) return '';
+  const q = Math.round(+e.q || 0), on = riceOn(e), opts = [];
+  for (let n = 0; n <= Math.max(q, on); n++) opts.push(`<option value="${n}"${n === on ? ' selected' : ''}>${n}</option>`);
+  return `<label class="rcnt${on < q ? ' part' : ''}">rice on <select class="rqs" data-entry="${esc(e.id)}" aria-label="Pieces eaten with rice">${opts.join('')}</select> of ${fq(q)}</label>`;
+}
 function partEditor(e) {
   const i = entryInfo(e); if (!i) return '';
   const a = e.adj || {};
@@ -538,7 +589,7 @@ function partEditor(e) {
     const w = on ? m : 1;
     return `<div class="crow${on ? '' : ' off'}${on && m !== 1 ? ' chg' : ''}"><label class="cl"><input type="checkbox" class="cck" data-entry="${esc(e.id)}" data-key="${x.key}"${on ? ' checked' : ''}><span>${esc(x.label)}</span></label>${sel}<span class="cg">${fg(x.g * w)} g · ${f1(x.k * w)} kcal · P ${f1(x.p * w)} · F ${f1(x.f * w)} · C ${f1(x.c * w)}${on ? '' : ' · not counted'}</span></div>`;
   }).join('');
-  return `<div class="cmp" role="group" aria-label="Parts of ${esc(e.name)}"><p class="cmphelp">Per piece. Untick anything you left (rice you didn't eat, say), or change a multiplier for a thin or thick cut.</p>${rows}</div>`;
+  return `<div class="cmp" role="group" aria-label="Parts of ${esc(e.name)}"><p class="cmphelp">Per piece. Change a multiplier for a thin or thick cut or a big rice ball, or untick a part. To leave the rice on only some pieces, use "rice on" instead.</p>${rows}</div>`;
 }
 function renderDay() {
   const inp = document.getElementById('dateInput'); if (inp.value !== state.date) inp.value = state.date;
@@ -583,7 +634,7 @@ function menuRow(i) {
   const e = entryFor(i.id), on = !!e, b = band(i.ratio), f = i.food;
   const tag = KIND_TAG[f.kind] ? `<span class="tag${f.kind === 'lib' ? ' lib' : f.kind === 'label' ? ' pub' : ''}">${KIND_TAG[f.kind]}</span>` : '';
   const adj = on && e.adj ? `<span class="adjl"><b>${esc(adjText(e))}</b></span>` : '';
-  const qty = on ? `<div class="qtywrap">${stepper(e)}${adj}</div>` : '';
+  const qty = on ? `<div class="qtywrap">${stepper(e)}${riceCount(e)}${adj}</div>` : '';
   const sub = f.cat === 'extra' ? f.jp + ' · ' + f.serving : f.jp + ' · ' + partsDesc(i);
   let det = '';
   if (state.open.has(i.id)) {
@@ -635,10 +686,11 @@ function renderLog() {
   el.innerHTML = list.map(e => {
     const q = +e.q || 0, i = entryInfo(e), ok = !!i && i.parts.length >= 2, open = ok && state.edit.has(e.id), t = adjText(e);
     const bar = ok || t ? `<div class="cbar">${ok ? `<button type="button" class="lnk" data-cmp="${esc(e.id)}" aria-expanded="${open}">${open ? 'Done adjusting' : 'Adjust rice and fish'}</button>` : ''}${t ? `<span class="adjl">Adjusted: <b>${esc(t)}</b></span>` : ''}</div>` : '';
-    const ctl = i ? stepper(e) : `<span class="tn">×${fq(q)}</span>`;
-    return `<div class="lrow"><div class="nm2">${esc(e.name)}<div class="lc">${esc(entryDesc(e))} · ${fmt(e.k)} kcal each</div></div>
-      <div class="lctl">${ctl}<button type="button" class="btn x" data-del="${esc(e.id)}" aria-label="Remove ${esc(e.name)}">Remove</button></div>
-      <div class="mac"><span><b>${fmt(e.k * q)}</b> kcal</span><span>P <b>${fmt(e.p * q)}</b></span><span>F <b>${fmt(e.f * q)}</b></span><span>C <b>${fmt(e.c * q)}</b></span></div>${bar}${open ? partEditor(e) : ''}</div>`;
+    const ctl = i ? stepper(e) : `<span class="tn">×${fq(q)}</span>`, x = tot(e), rc = riceCount(e);
+    const each = e.r && e.r.k > 0 ? `${fmt(e.k)} kcal with rice, ${fmt(e.k - e.r.k)} without` : `${fmt(e.k)} kcal each`;
+    return `<div class="lrow"><div class="nm2">${esc(e.name)}<div class="lc">${esc(entryDesc(e))} · ${each}</div></div>
+      <div class="lctl">${ctl}<button type="button" class="btn x" data-del="${esc(e.id)}" aria-label="Remove ${esc(e.name)}">Remove</button></div>${rc ? `<div class="lctl">${rc}</div>` : ''}
+      <div class="mac"><span><b>${fmt(x.k)}</b> kcal</span><span>P <b>${fmt(x.p)}</b></span><span>F <b>${fmt(x.f)}</b></span><span>C <b>${fmt(x.c)}</b></span></div>${bar}${open ? partEditor(e) : ''}</div>`;
   }).join('');
 }
 function renderHistory() {
@@ -694,7 +746,7 @@ function toggleRecent(key, add) {
   const r = recentIndex.get(key); if (!r) return;
   if (!add) { setDay(dayEntries().filter(e => recentKey(e) !== key)); return; }
   const e = r.e, x = { id: rid(), itemId: e.itemId || null, name: e.name, q: 1, k: +e.k || 0, p: +e.p || 0, f: +e.f || 0, c: +e.c || 0 };
-  if (e.itemId) { x.rice = e.rice == null ? null : e.rice; x.fm = e.fm == null ? null : e.fm; if (e.adj) x.adj = { ...e.adj }; }
+  if (e.itemId) { x.rice = e.rice == null ? null : e.rice; x.fm = e.fm == null ? null : e.fm; if (e.adj) x.adj = { ...e.adj }; if (e.r) x.r = { ...e.r }; }
   else x.loc = e.loc || 'Added by you';
   setDay(dayEntries().concat([x]));
 }
@@ -708,10 +760,10 @@ function renderMF() {
   const done = list.filter(e => e.mf).length;
   const btn = (lab, val) => `<button type="button" class="mfv" data-copy="${esc(val)}" aria-label="Copy ${lab} ${esc(val)}"><span>${lab}</span><b>${esc(val)}</b></button>`;
   el.innerHTML = `<div class="mfhead">${done} of ${list.length} entered in MacroFactor</div>` + list.map(e => {
-    const q = +e.q || 0, name = entryName(e) + (q !== 1 ? ' x' + fq(q) : '');
+    const q = +e.q || 0, name = entryName(e) + (q !== 1 ? ' x' + fq(q) : '') + (riceNote(e) ? ' (' + riceNote(e) + ')' : ''), x = tot(e);
     return `<div class="mfrow${e.mf ? ' done' : ''}"><div class="mfn"><button type="button" class="mfname" data-copy="${esc(name)}" aria-label="Copy name">${esc(name)}</button>
       <label class="mfck"><input type="checkbox" class="mfdone" data-entry="${esc(e.id)}" ${e.mf ? 'checked' : ''}> Entered</label></div>
-      <div class="mfvals">${btn('Calories', Math.round(e.k * q))}${btn('Protein', Math.round(e.p * q))}${btn('Fat', Math.round(e.f * q))}${btn('Carbs', Math.round(e.c * q))}</div></div>`;
+      <div class="mfvals">${btn('Calories', Math.round(x.k))}${btn('Protein', Math.round(x.p))}${btn('Fat', Math.round(x.f))}${btn('Carbs', Math.round(x.c))}</div></div>`;
   }).join('');
 }
 function renderAll() { renderDay(); renderMenu(); renderLog(); renderMF(); renderRecent(); renderHistory(); renderTabs(); setStatus(); }
@@ -744,13 +796,14 @@ function stepClick(ev) { const s = ev.target.closest('[data-step]'); if (!s) ret
 document.getElementById('menuRows').addEventListener('change', ev => {
   const t = ev.target;
   if (t.matches('input.ck')) { t.checked ? addItem(t.dataset.item) : removeItem(t.dataset.item); }
+  else if (t.matches('select.rqs')) setRiceCount(t.dataset.entry, +t.value);
 });
 document.getElementById('menuRows').addEventListener('click', ev => {
   if (stepClick(ev)) return;
   const b = ev.target.closest('[data-open]'); if (!b) return;
   const id = b.dataset.open; state.open.has(id) ? state.open.delete(id) : state.open.add(id); renderMenu();
 });
-document.getElementById('logRows').addEventListener('change', ev => { partChange(ev.target); });
+document.getElementById('logRows').addEventListener('change', ev => { if (ev.target.matches('select.rqs')) setRiceCount(ev.target.dataset.entry, +ev.target.value); else partChange(ev.target); });
 document.getElementById('logRows').addEventListener('click', ev => {
   if (stepClick(ev)) return;
   const b = ev.target.closest('[data-del]'); if (b) { removeEntry(b.dataset.del); return; }
@@ -796,7 +849,7 @@ form.addEventListener('submit', ev => {
 document.getElementById('copyLog').addEventListener('click', () => {
   const list = dayEntries();
   if (!list.length) { showMsg('Nothing to copy for this day.'); return; }
-  const lines = list.map(e => { const q = +e.q || 0; return `${state.date} | ${entryName(e)} (${entryDesc(e)}) x${fq(q)} | ${fmt(e.k * q)} kcal | P ${fmt(e.p * q)} | F ${fmt(e.f * q)} | C ${fmt(e.c * q)}`; });
+  const lines = list.map(e => { const q = +e.q || 0, x = tot(e); return `${state.date} | ${entryLabel(e)} (${entryDesc(e)}) x${fq(q)} | ${fmt(x.k)} kcal | P ${fmt(x.p)} | F ${fmt(x.f)} | C ${fmt(x.c)}`; });
   const t = totals(list);
   lines.push(`${state.date} | Day total, ${fq(t.pcs)} pieces/servings | ${fmt(t.k)} kcal | P ${fmt(t.p)} | F ${fmt(t.f)} | C ${fmt(t.c)} | Sushi tracker estimates`);
   const text = lines.join('\n');
@@ -830,6 +883,8 @@ function cleanEntry(e) {
   if (x.itemId) {
     x.rice = e.rice == null ? null : num(e.rice); x.fm = e.fm == null ? null : num(e.fm);
     if (e.adj && typeof e.adj === 'object') { const a = {}; for (const [k, v] of Object.entries(e.adj)) if (/^[a-z]+$/.test(k) && Number.isFinite(+v) && +v >= 0) a[k] = +v; if (Object.keys(a).length) x.adj = a; }
+    if (e.r && typeof e.r === 'object') x.r = { k: num(e.r.k), p: num(e.r.p), f: num(e.r.f), c: num(e.r.c) };
+    if (x.r && e.rq != null && Number.isFinite(+e.rq) && +e.rq >= 0 && +e.rq < x.q) x.rq = Math.round(+e.rq);
   } else x.loc = typeof e.loc === 'string' ? e.loc : 'Added by you';
   return x;
 }
@@ -849,6 +904,7 @@ document.getElementById('restoreFile').addEventListener('change', async ev => {
   } catch (e) { backupMsg('That file is not a sushi tracker backup, so nothing changed.', true); }
 });
 document.getElementById('appVer').textContent = APP_VERSION;
+migrate();
 renderAll();
 (async () => {
   try { if (navigator.storage && navigator.storage.persist) persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); } catch (e) {}

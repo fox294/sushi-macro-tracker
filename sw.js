@@ -1,5 +1,5 @@
 // Sushi Macro Tracker service worker: works offline after the first visit.
-const VERSION = '2026-11-06-1';
+const VERSION = '2026-11-06-2';
 const SHELL = 'smt-shell-' + VERSION;
 const FONTS = 'smt-fonts';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
